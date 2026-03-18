@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linked List Snake Game</title>
+    <style>
+        body {
+            background-color: #2c3e50; /* 어두운 배경 */
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin-top: 50px;
+        }
+        canvas {
+            background-color: #34495e; /* 게임판 배경 */
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            border: 3px solid #ecf0f1;
+            border-radius: 5px;
+        }
+        .instructions {
+            margin-top: 15px;
+            color: #bdc3c7;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🐍 Linked List Snake</h1>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div class="instructions">방향키 (↑, ↓, ←, →)를 눌러 게임을 시작하세요!</div>
+
+    <script>
+        // ----------------------------------------
+        // 1. 연결리스트 자료구조 정의 (JavaScript 버전)
+        // ----------------------------------------
+        class Node {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.next = null;
+            }
+        }
+
+        class LinkedListSnake {
+            constructor(x, y) {
+                this.head = new Node(x, y);
+            }
+
+            move(newX, newY, ateFood) {
+                // 1. 이동할 위치에 새로운 머리 추가 (맨 앞 삽입)
+                const newHead = new Node(newX, newY);
+                newHead.next = this.head;
+                this.head = newHead;
+
+                // 2. 먹이를 먹지 않았다면 꼬리 자르기 (맨 뒤 삭제)
+                if (!ateFood) {
+                    let curr = this.head;
+                    while (curr.next && curr.next.next) {
+                        curr = curr.next;
+                    }
+                    curr.next = null; // 꼬리 연결 끊기
+                }
+            }
+
+            // 그리기 처리를 위해 뱀의 좌표를 배열로 반환
+            getCoords() {
+                const coords = [];
+                let curr = this.head;
+                while (curr) {
+                    coords.push({x: curr.x, y: curr.y});
+                    curr = curr.next;
+                }
+                return coords;
+            }
+        }
+
+        // ----------------------------------------
+        // 2. 게임 기본 설정
+        // ----------------------------------------
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const gridSize = 20; // 한 칸의 픽셀 크기
+        const tileCount = canvas.width / gridSize; // 가로세로 칸 수 (20x20)
+
+        let snake = new LinkedListSnake(10, 10);
+        let dx = 0;
+        let dy = 0;
+        let foodX = 15;
+        let foodY = 15;
+        let score = 0;
+
+        // ----------------------------------------
+        // 3. 키보드 입력 이벤트 처리
+        // ----------------------------------------
+        document.addEventListener("keydown", (e) => {
+            // 방향키를 눌렀을 때 웹페이지가 스크롤되는 현상 방지
+            if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+                e.preventDefault();
+            }
+
+            if (e.key === "ArrowUp" && dy !== 1) { dx = 0; dy = -1; }
+            if (e.key === "ArrowDown" && dy !== -1) { dx = 0; dy = 1; }
+            if (e.key === "ArrowLeft" && dx !== 1) { dx = -1; dy = 0; }
+            if (e.key === "ArrowRight" && dx !== -1) { dx = 1; dy = 0; }
+        });
+
+        // ----------------------------------------
+        // 4. 메인 게임 루프 (초당 약 10프레임)
+        // ----------------------------------------
+        function gameLoop() {
+            update();
+            draw();
+            setTimeout(gameLoop, 100); // 100ms 마다 반복 (속도 조절 가능)
+        }
+
+        function update() {
+            // 방향키를 누르기 전(정지 상태)에는 업데이트 하지 않음
+            if (dx === 0 && dy === 0) return;
+
+            const headX = snake.head.x + dx;
+            const headY = snake.head.y + dy;
+
+            // 1. 벽 충돌 체크
+            if (headX < 0 || headX >= tileCount || headY < 0 || headY >= tileCount) {
+                resetGame();
+                return;
+            }
+
+            // 2. 자기 몸 충돌 체크
+            const coords = snake.getCoords();
+            for (let i = 0; i < coords.length; i++) {
+                if (headX === coords[i].x && headY === coords[i].y) {
+                    resetGame();
+                    return;
+                }
+            }
+
+            // 3. 먹이 섭취 체크
+            let ateFood = false;
+            if (headX === foodX && headY === foodY) {
+                ateFood = true;
+                score += 10;
+                placeFood();
+            }
+
+            // 4. 뱀 이동 (연결리스트 업데이트)
+            snake.move(headX, headY, ateFood);
+        }
+
+        function draw() {
+            // 배경 지우기
+            ctx.fillStyle = "#34495e";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 먹이 그리기
+            ctx.fillStyle = "#e74c3c"; // 빨간색
+            ctx.fillRect(foodX * gridSize, foodY * gridSize, gridSize - 2, gridSize - 2);
+
+            // 뱀 그리기
+            const coords = snake.getCoords();
+            coords.forEach((part, index) => {
+                if (index === 0) {
+                    ctx.fillStyle = "#2ecc71"; // 머리는 밝은 초록색
+                } else {
+                    ctx.fillStyle = "#27ae60"; // 몸통은 약간 어두운 초록색
+                }
+                ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize - 2, gridSize - 2);
+            });
+
+            // 점수 표시
+            ctx.fillStyle = "white";
+            ctx.font = "16px sans-serif";
+            ctx.fillText("Score: " + score, 10, 25);
+        }
+
+        function placeFood() {
+            // 0 ~ 19 사이의 랜덤 좌표 생성
+            foodX = Math.floor(Math.random() * tileCount);
+            foodY = Math.floor(Math.random() * tileCount);
+        }
+
+        function resetGame() {
+            // 게임 초기화
+            snake = new LinkedListSnake(10, 10);
+            dx = 0;
+            dy = 0;
+            score = 0;
+            placeFood();
+        }
+
+        // 게임 시작!
+        gameLoop();
+    </script>
+</body>
+</html>
